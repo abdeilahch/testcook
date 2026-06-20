@@ -2,13 +2,14 @@ import tkinter as tk
 from tkinter.scrolledtext import ScrolledText
 import threading
 import traceback
+import time
 from playwright.sync_api import sync_playwright
 
 
 URLS = [
-    "https://www.google.com",
-    "https://www.linkedin.com",
-    "https://www.youtube.com"
+    "https://costream.mycloud.intranatixis.com",
+    "https://cockpit.intranatixis.com",
+    "https://mycloud.d.bbg/auth/saml/login"
 ]
 
 
@@ -18,43 +19,82 @@ def log(msg):
     root.update()
 
 
+def wait_ready(page, context, url):
+
+    log(f"OPEN {url}")
+
+    page.goto(url)
+
+    cookies_ok = False
+    stable_count = 0
+
+    # boucle de verification (max ~30s)
+    for _ in range(60):
+
+        try:
+            cookies = context.cookies()
+
+            # condition : cookies présents
+            if len(cookies) > 0:
+                stable_count += 1
+            else:
+                stable_count = 0
+
+            # condition : pas de navigation active
+            state = page.evaluate("document.readyState")
+
+            if state == "complete" and stable_count >= 3:
+                cookies_ok = True
+                break
+
+            time.sleep(0.5)
+
+        except:
+            pass
+
+    return context.cookies(), cookies_ok
+
+
 def run():
 
     def worker():
         try:
-            log("START")
+            log("START\n")
 
             with sync_playwright() as p:
 
-                log("Launch Chromium")
+                browser = p.chromium.launch(
+                    headless=False
+                )
 
-                browser = p.chromium.launch(headless=False)
                 context = browser.new_context()
+
+                results = {}
 
                 for url in URLS:
 
-                    try:
-                        log(f"\nOPEN: {url}")
+                    page = context.new_page()
 
-                        page = context.new_page()
-                        page.goto(url)
+                    cookies, ok = wait_ready(page, context, url)
 
-                        log("WAIT 15s")
-                        page.wait_for_timeout(15000)
+                    log(f"\nDONE {url} | stable={ok}")
 
-                        cookies = context.cookies()
+                    results[url] = cookies
 
-                        log(f"COOKIES: {len(cookies)}")
+                    time.sleep(2)  # interval entre sites
 
-                        for c in cookies:
-                            log(f"{c['name']} = {c['value']}")
+                log("\n====================")
+                log("COOKIES RESULT")
+                log("====================\n")
 
-                    except Exception:
-                        log("PAGE ERROR")
-                        log(traceback.format_exc())
+                for url, cookies in results.items():
 
-                browser.close()
-                log("END")
+                    log(f"\n--- {url} ---")
+
+                    for c in cookies:
+                        log(f"{c['name']} = {c['value']}")
+
+            log("\nEND")
 
         except Exception:
             log("FATAL ERROR")
@@ -65,11 +105,11 @@ def run():
 
 # GUI
 root = tk.Tk()
-root.title("DEBUG COOKIE TOOL")
+root.title("COOKIE MONITOR")
 root.geometry("900x600")
 
 btn = tk.Button(root, text="START", command=run)
-btn.pack()
+btn.pack(pady=10)
 
 txt = ScrolledText(root)
 txt.pack(fill="both", expand=True)
