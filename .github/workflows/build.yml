@@ -25,7 +25,7 @@ jobs:
 
     - name: Build
       run: |
-        pyinstaller --onedir --noconsole main.py --clean
+        pyinstaller --onedir --noconsole main.py --clean --collect-all playwright
 
     - name: Upload
       uses: actions/upload-artifact@v4
