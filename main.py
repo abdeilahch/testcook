@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter.scrolledtext import ScrolledText
 import threading
-import time
+import traceback
 from playwright.sync_api import sync_playwright
 
 
@@ -12,73 +12,64 @@ URLS = [
 ]
 
 
-def run_browser():
+def log(msg):
+    txt.insert(tk.END, msg + "\n")
+    txt.see(tk.END)
+    root.update()
+
+
+def run():
 
     def worker():
+        try:
+            log("START")
 
-        txt.delete("1.0", tk.END)
-        txt.insert(tk.END, "Démarrage Chromium embarqué...\n\n")
+            with sync_playwright() as p:
 
-        with sync_playwright() as p:
+                log("Launch Chromium")
 
-            browser = p.chromium.launch(
-                headless=False  # IMPORTANT pour SSO stable
-            )
+                browser = p.chromium.launch(headless=False)
+                context = browser.new_context()
 
-            context = browser.new_context()
+                for url in URLS:
 
-            page = context.new_page()
+                    try:
+                        log(f"\nOPEN: {url}")
 
-            all_cookies = {}
+                        page = context.new_page()
+                        page.goto(url)
 
-            for url in URLS:
+                        log("WAIT 15s")
+                        page.wait_for_timeout(15000)
 
-                txt.insert(tk.END, f"\n➡️ Ouverture : {url}\n")
+                        cookies = context.cookies()
 
-                page.goto(url, wait_until="domcontentloaded")
+                        log(f"COOKIES: {len(cookies)}")
 
-                # laisser les redirections SSO / JS charger
-                page.wait_for_timeout(15000)
+                        for c in cookies:
+                            log(f"{c['name']} = {c['value']}")
 
-                # attendre fin réseau (SSO)
-                try:
-                    page.wait_for_load_state("networkidle", timeout=10000)
-                except:
-                    pass
+                    except Exception:
+                        log("PAGE ERROR")
+                        log(traceback.format_exc())
 
-                cookies = context.cookies()
+                browser.close()
+                log("END")
 
-                all_cookies[url] = cookies
-
-                txt.insert(tk.END, f"Cookies récupérés : {len(cookies)}\n")
-
-            # AFFICHAGE FINAL
-            txt.insert(tk.END, "\n\n=====================\n")
-            txt.insert(tk.END, "      COOKIES\n")
-            txt.insert(tk.END, "=====================\n\n")
-
-            for url, cookies in all_cookies.items():
-
-                txt.insert(tk.END, f"\n🌐 {url}\n")
-
-                for c in cookies:
-
-                    txt.insert(tk.END, f"- {c['name']} = {c['value']}\n")
-                    txt.insert(tk.END, f"  domaine : {c['domain']}\n")
-
-            browser.close()
+        except Exception:
+            log("FATAL ERROR")
+            log(traceback.format_exc())
 
     threading.Thread(target=worker, daemon=True).start()
 
 
-# ---------------- GUI ----------------
-
+# GUI
 root = tk.Tk()
-root.title("SSO Cookie Extractor (Playwright)")
+root.title("DEBUG COOKIE TOOL")
 root.geometry("900x600")
 
-btn = tk.Button(root, text="Lancer extraction cookies", command=run_browser)
-btn.pack(pady=10)
+btn = tk.Button(root, text="START", command=run)
+btn.pack()
 
 txt = ScrolledText(root)
 txt.pack(fill="both", expand=True)
