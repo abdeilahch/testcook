@@ -1,8 +1,8 @@
 import tkinter as tk
 from tkinter.scrolledtext import ScrolledText
 import threading
-import traceback
 import time
+import traceback
 from playwright.sync_api import sync_playwright
 
 
@@ -19,73 +19,78 @@ def log(msg):
     root.update()
 
 
-def wait_ready(page, context, url):
+def wait_redirect_and_cookies(page, context):
 
-    log(f"OPEN {url}")
+    # attendre navigation + JS
+    try:
+        page.wait_for_load_state("networkidle", timeout=10000)
+    except:
+        pass
 
-    page.goto(url)
+    # click si horizon
+    try:
+        el = page.query_selector("#Kerberos_Horizon")
+        if el:
+            el.click()
+            log("Kerberos_Horizon CLICK")
+            page.wait_for_timeout(3000)
+    except:
+        pass
 
-    cookies_ok = False
-    stable_count = 0
+    # attendre stabilité cookies
+    stable = 0
+    last = -1
 
-    # boucle de verification (max ~30s)
-    for _ in range(60):
+    for _ in range(30):
 
-        try:
-            cookies = context.cookies()
+        cookies = context.cookies()
+        count = len(cookies)
 
-            # condition : cookies présents
-            if len(cookies) > 0:
-                stable_count += 1
-            else:
-                stable_count = 0
+        if count == last and count > 0:
+            stable += 1
+        else:
+            stable = 0
 
-            # condition : pas de navigation active
-            state = page.evaluate("document.readyState")
+        last = count
 
-            if state == "complete" and stable_count >= 3:
-                cookies_ok = True
-                break
+        if stable >= 3:
+            return cookies
 
-            time.sleep(0.5)
+        time.sleep(1)
 
-        except:
-            pass
-
-    return context.cookies(), cookies_ok
+    return context.cookies()
 
 
 def run():
 
     def worker():
+
         try:
-            log("START\n")
+            log("START")
 
             with sync_playwright() as p:
 
-                browser = p.chromium.launch(
-                    headless=False
-                )
-
+                browser = p.chromium.launch(headless=False)
                 context = browser.new_context()
 
                 results = {}
 
-                for url in URLS:
+                for i, url in enumerate(URLS):
+
+                    log(f"\nOPEN {url}")
 
                     page = context.new_page()
+                    page.goto(url)
 
-                    cookies, ok = wait_ready(page, context, url)
-
-                    log(f"\nDONE {url} | stable={ok}")
+                    cookies = wait_redirect_and_cookies(page, context)
 
                     results[url] = cookies
 
-                    time.sleep(2)  # interval entre sites
+                    log(f"COOKIES {url}: {len(cookies)}")
 
-                log("\n====================")
-                log("COOKIES RESULT")
-                log("====================\n")
+                    time.sleep(2)
+
+                log("\n===== COOKIES =====\n")
 
                 for url, cookies in results.items():
 
@@ -94,10 +99,12 @@ def run():
                     for c in cookies:
                         log(f"{c['name']} = {c['value']}")
 
-            log("\nEND")
+                browser.close()
+
+            log("END")
 
         except Exception:
-            log("FATAL ERROR")
+            log("ERROR")
             log(traceback.format_exc())
 
     threading.Thread(target=worker, daemon=True).start()
@@ -105,11 +112,10 @@ def run():
 
 # GUI
 root = tk.Tk()
-root.title("COOKIE MONITOR")
+root.title("COOKIE TOOL")
 root.geometry("900x600")
 
-btn = tk.Button(root, text="START", command=run)
-btn.pack(pady=10)
+tk.Button(root, text="START", command=run).pack()
 
 txt = ScrolledText(root)
 txt.pack(fill="both", expand=True)
