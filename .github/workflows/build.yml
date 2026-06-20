@@ -15,15 +15,7 @@ jobs:
       with:
         python-version: "3.10"
 
-    # Cache Playwright (ACCELERE builds futurs)
-    - name: Cache Playwright
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/ms-playwright
-        key: playwright-${{ runner.os }}
-
-    - name: Install dependencies
+    - name: Install
       run: |
         pip install playwright pyinstaller
         python -m playwright install chromium
@@ -31,10 +23,9 @@ jobs:
       env:
         PLAYWRIGHT_BROWSERS_PATH: 0
 
-    # BUILD OPTIMISÉ (IMPORTANT)
-    - name: Build EXE
+    - name: Build
       run: |
-        pyinstaller --onedir --noconsole --clean main.py
+        pyinstaller --onedir --noconsole main.py --clean
 
     - name: Upload
       uses: actions/upload-artifact@v4
