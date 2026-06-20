@@ -15,6 +15,14 @@ jobs:
       with:
         python-version: "3.10"
 
+    # Cache Playwright (ACCELERE builds futurs)
+    - name: Cache Playwright
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/ms-playwright
+        key: playwright-${{ runner.os }}
+
     - name: Install dependencies
       run: |
         pip install playwright pyinstaller
@@ -23,12 +31,13 @@ jobs:
       env:
         PLAYWRIGHT_BROWSERS_PATH: 0
 
+    # BUILD OPTIMISÉ (IMPORTANT)
     - name: Build EXE
       run: |
-        pyinstaller --onefile --noconsole main.py
+        pyinstaller --onedir --noconsole --clean main.py
 
     - name: Upload
       uses: actions/upload-artifact@v4
       with:
         name: exe
-        path: dist/*.exe
+        path: dist/
