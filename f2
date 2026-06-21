@@ -1,0 +1,80 @@
+import time
+from playwright.sync_api import sync_playwright
+
+
+def get_sites_data(urls):
+
+    results = {}
+
+    with sync_playwright() as p:
+
+        browser = p.chromium.launch(headless=False)
+        context = browser.new_context()
+
+        for url in urls:
+
+            page = context.new_page()
+            page.goto(url)
+
+            try:
+                page.wait_for_load_state("networkidle", timeout=10000)
+            except:
+                pass
+
+            try:
+                horizon = page.query_selector("#Kerberos_Horizon")
+                if horizon:
+                    horizon.click()
+                    page.wait_for_timeout(3000)
+            except:
+                pass
+
+            stable = 0
+            last = -1
+
+            for _ in range(30):
+
+                cookies = context.cookies()
+                count = len(cookies)
+
+                if count > 0 and count == last:
+                    stable += 1
+                else:
+                    stable = 0
+
+                last = count
+
+                if stable >= 3:
+                    break
+
+                time.sleep(1)
+
+            cookies = {
+                c["name"]: c["value"]
+                for c in context.cookies()
+            }
+
+            try:
+                local_storage = page.evaluate("""
+                () => {
+                    const data = {};
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        data[key] = localStorage.getItem(key);
+                    }
+                    return data;
+                }
+                """)
+            except:
+                local_storage = {}
+
+            results[url] = {
+                "cookies": cookies,
+                "localStorage": local_storage
+            }
+
+            time.sleep(2)
+
+        browser.close()
+
+    return results
