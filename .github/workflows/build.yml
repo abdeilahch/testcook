@@ -20,12 +20,17 @@ jobs:
 
     - name: Install dependencies
       run: |
-        pip install playwright pyinstaller
+        pip install playwright pyinstaller bs4 requests openpyxl
         python -m playwright install chromium
 
     - name: Build EXE
-      run: |
-        pyinstaller --onefile --noconsole --collect-all playwright main.py
+      shell: pwsh
+      run: >
+        pyinstaller --onefile --noconsole
+        --collect-all playwright
+        --add-data "modules;modules"
+        --add-data "Templates;Templates"
+        main.py
 
     - name: Upload
       uses: actions/upload-artifact@v4
